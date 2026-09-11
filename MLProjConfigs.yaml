@@ -1,0 +1,22 @@
+experiment:
+  name: deepfake_detector_test
+  epochs: 5
+  batch_size: 32
+  learning_rate: 0.001
+  input_size: [112, 112]
+
+model:
+  name: SimpleCNN
+
+data:
+  base_dir: celeb_df_results
+  test_split: 0.2
+
+output:
+  log_file: training_results.csv
+
+transfer_learning:
+  freeze_backbone: True         # Freeze the base model initially
+  dropout_rate: 0.3             # Helps regularize; try 0.3–0.5 for deeper models
+  patience: 5                   # Early stopping patience: 5 epochs without improvement
+  unfreeze_after_epoch: 5      # Unfreeze backbone after a few warmup epochs
