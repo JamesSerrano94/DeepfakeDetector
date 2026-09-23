@@ -1,0 +1,60 @@
+rules_version = '2';
+
+// Security rules for the Deepfake Detector's shared confusion matrix.
+// Paste this into Firebase console > Firestore Database > Rules, then Publish.
+//
+// Anyone can read the four counts. A write may only add 1 to a single count,
+// and prediction records can be added but never read, edited or deleted
+// from the website (you can still see them in the Firebase console).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /stats/confusion {
+      allow read: if true;
+
+      // First ever write: the document holds exactly one count, equal to 1.
+      allow create: if onlyCountFields()
+        && request.resource.data.size() == 1
+        && request.resource.data.values()[0] == 1;
+
+      // Every later write: exactly one count goes up by exactly 1.
+      allow update: if onlyCountFields() && (
+           (bumped('tp') && same('fp') && same('fn') && same('tn'))
+        || (same('tp') && bumped('fp') && same('fn') && same('tn'))
+        || (same('tp') && same('fp') && bumped('fn') && same('tn'))
+        || (same('tp') && same('fp') && same('fn') && bumped('tn'))
+      );
+
+      allow delete: if false;
+    }
+
+    match /predictions/{id} {
+      allow create: if request.resource.data.keys().hasOnly(
+            ['probability', 'verdict', 'actual', 'frames', 'createdAt'])
+        && request.resource.data.keys().hasAll(
+            ['probability', 'verdict', 'actual', 'frames', 'createdAt'])
+        && request.resource.data.probability is number
+        && request.resource.data.probability >= 0
+        && request.resource.data.probability <= 1
+        && request.resource.data.verdict in ['synthetic', 'authentic']
+        && (request.resource.data.actual == null
+            || request.resource.data.actual in ['synthetic', 'authentic'])
+        && request.resource.data.frames is int
+        && request.resource.data.frames > 0
+        && request.resource.data.frames <= 64
+        && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if false;
+    }
+
+    function onlyCountFields() {
+      return request.resource.data.keys().hasOnly(['tp', 'fp', 'fn', 'tn']);
+    }
+    function bumped(k) {
+      return request.resource.data.get(k, 0) == resource.data.get(k, 0) + 1;
+    }
+    function same(k) {
+      return request.resource.data.get(k, 0) == resource.data.get(k, 0);
+    }
+  }
+}
